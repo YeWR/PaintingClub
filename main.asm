@@ -35,6 +35,7 @@ IDM_CW			     equ 40015
 IDM_AW		         equ	40016
 IDM_H				     equ	40017
 IDM_V				     equ	40018
+IDM_S                   equ 40019
 
 ID_TOOLBAR        equ  1
 ID_EDIT                equ  2
@@ -106,8 +107,6 @@ InfoHeader BITMAPINFOHEADER <>
 ; 定义绘图关键变量
 BackgroundColor dd 0FFFFFFh
 ForegroundColor dd 0FFFFFFh	
-BigSize           word 0
-SmallSize           word 0
 LineWidth            dd 1
 DrawType            dd _point ;详见.const定义 
 FillType                dd _empty
@@ -300,7 +299,8 @@ LoadFile proc path:DWORD, DC:DWORD
 	invoke CreateCompatibleDC, hDc
     mov @tempDc,eax
 	invoke SelectObject, @tempDc, hBmp
-	invoke BitBlt,DC,0,0,@bitmap.bmWidth,@bitmap.bmHeight,@tempDc,0,0,SRCCOPY
+	invoke BitBlt, DC, 0, 0, SCREENWIDTH, SCREENHEIGHT, @tempDc, 0, 0, WHITENESS 
+	invoke BitBlt,DC,0,50,@bitmap.bmWidth,@bitmap.bmHeight,@tempDc,0,0,SRCCOPY
 	invoke DeleteDC, @tempDc
 
 	invoke _SetLastDc, hWinMain
@@ -394,7 +394,6 @@ SaveFile proc hParent:DWORD, SaveBitmap:DWORD
 SaveFile endp
 
 ResizeImage proc DC:DWORD, Mode:DWORD, Ratio:WORD
-
 	local @bitmap:BITMAP
 	local @tempDc:dword
 	local @printWidth:dword, @printHeight:dword
@@ -424,7 +423,10 @@ ResizeImage proc DC:DWORD, Mode:DWORD, Ratio:WORD
 	invoke CreateCompatibleDC, hDc
     mov @tempDc,eax
 	invoke SelectObject, @tempDc, hBmp
-	invoke StretchBlt,DC,0,0,@printWidth,@printHeight,@tempDc,0,0,@bitmap.bmWidth,@bitmap.bmHeight,SRCCOPY
+
+	invoke BitBlt, DC, 0, 0, SCREENWIDTH, SCREENHEIGHT, @tempDc, 0, 0, WHITENESS 
+	invoke StretchBlt,DC,0,50,@printWidth,@printHeight,@tempDc,0,0,@bitmap.bmWidth,@bitmap.bmHeight,SRCCOPY
+	
 	invoke DeleteDC, @tempDc
 
 	invoke _SetLastDc, hWinMain
@@ -450,11 +452,16 @@ FlipImage proc DC:DWORD, Mode:DWORD
     mov @tempDc,eax
 	invoke SelectObject, @tempDc, hBmp
 	.if Mode == 1
-		invoke StretchBlt,DC,@bitmap.bmWidth,0,@WidthNeg,@bitmap.bmHeight,@tempDc,0,0,@bitmap.bmWidth,@bitmap.bmHeight,SRCCOPY
+		invoke BitBlt, DC, 0, 0, SCREENWIDTH, SCREENHEIGHT, @tempDc, 0, 0, WHITENESS 
+		invoke StretchBlt,DC,@bitmap.bmWidth,50,@WidthNeg,@bitmap.bmHeight,@tempDc,0,0,@bitmap.bmWidth,@bitmap.bmHeight,SRCCOPY
 	.elseif Mode == 2
-		invoke StretchBlt,DC,0,@bitmap.bmHeight,@bitmap.bmWidth,@HeightNeg,@tempDc,0,0,@bitmap.bmWidth,@bitmap.bmHeight,SRCCOPY
+		mov eax, @bitmap.bmHeight
+		add eax,50
+		invoke BitBlt, DC, 0, 0, SCREENWIDTH, SCREENHEIGHT, @tempDc, 0, 0, WHITENESS 
+		invoke StretchBlt,DC,0,eax,@bitmap.bmWidth,@HeightNeg,@tempDc,0,0,@bitmap.bmWidth,@bitmap.bmHeight,SRCCOPY
 	.elseif Mode == 3
-		invoke StretchBlt,DC,@bitmap.bmWidth,@bitmap.bmHeight,@WidthNeg,@HeightNeg,@tempDc,0,0,@bitmap.bmWidth,@bitmap.bmHeight,SRCCOPY
+		invoke BitBlt, DC, 0, 0, SCREENWIDTH, SCREENHEIGHT, @tempDc, 0, 0, WHITENESS 
+		invoke StretchBlt,DC,0,50,@bitmap.bmWidth,@bitmap.bmHeight,@tempDc,0,0,@bitmap.bmWidth,@bitmap.bmHeight,SRCCOPY
 	.endif
 	invoke DeleteDC, @tempDc
 
@@ -509,39 +516,15 @@ _ProcWinMain    proc     uses ebx edi esi hWnd ,uMsg,wParam,lParam
 				.elseif    ax == IDM_TEXT
 					mov DrawType, _text
 				.elseif    ax == IDM_BIG
-					push dx
-					mov dx, BigSize
-					add dx, 1
-					mov BigSize, dx
-					pop dx
-					.if BigSize > 0
-						push dx
-						mov dx, BigSize
-						add dx, 1
-						invoke ResizeImage,hDc, 1, dx
-						pop dx
-					.endif
+					invoke ResizeImage,hDc, 1, 2
 				.elseif    ax == IDM_SMALL
-					push dx
-					mov dx, SmallSize
-					add dx, 1
-					mov SmallSize, dx
-					pop dx
-					.if SmallSize > 0
-						push dx
-						mov dx, SmallSize
-						add dx, 1
-						invoke ResizeImage,hDc, 1, dx
-						pop dx
-					.endif
-				.elseif    ax == IDM_CW
-					; TO DO
-				.elseif    ax == IDM_AW
-					; TO DO
+					invoke ResizeImage,hDc, 0, 2
 				.elseif    ax == IDM_H
 					invoke FlipImage,hDc, 1
 				.elseif    ax == IDM_V
 					invoke FlipImage,hDc, 2
+				.elseif ax == IDM_S
+					invoke FlipImage,hDc, 3
 				.elseif    ax == IDM_NEW
 					; TO DO
 				.elseif    ax == IDM_SAVE
