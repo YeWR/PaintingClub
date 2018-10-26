@@ -57,6 +57,7 @@ IDC_PATTERNEDIT              equ      2009
 IDC_FULLBOX					 equ      2010
 IDC_EMPTYBOX                 equ     2011
 IDC_TYPEEDIT                   equ       2012
+IDC_ERASE                         equ      2013
 
 IDD_WIDTHDLG     equ      105
 IDI_ONE				 equ		3001
@@ -68,6 +69,14 @@ IDC_TWOBOX       equ      3006
 IDC_FOURBOX      equ     3007
 IDC_EIGHTBOX     equ     3008
 IDC_WIDTHEDIT   equ     3009
+
+IDD_TEXTDLG             equ     106
+IDC_CUSTOMTEXT       equ    6001
+IDTEXT                       equ     6002
+
+IDD_SAVEDLG                equ   107
+ID_SAVE                         equ 7001
+ID_NO                            equ  7002
 
 MAX_FILE equ 260
 ;============================================
@@ -96,6 +105,7 @@ hMenu             dd       ?	;菜单句柄
 hWinToolbar    dd       ?	;工具栏句柄
 hWinEdit          dd       ?	
 hbmp               dd       ?	;工具栏位图句柄
+hCursor            dd       ?
 CustomColors dd 16 dup(?)
 
 hBmp dd ?
@@ -110,6 +120,8 @@ ForegroundColor dd 0FFFFFFh
 LineWidth            dd 1
 DrawType            dd _point ;详见.const定义 
 FillType                dd _empty
+szText         byte 40 dup(0),0
+szTextLength       dd ?
 ;============================================
 
 .const
@@ -129,6 +141,9 @@ szFileName  db MAX_PATH dup(?)
 szClass         db "EDIT",0
 szClassName     db       "PAINT",0
 szCaptionMain   db       '画图',0
+szHelpCaption    db        '帮助',0
+szHelp                db       '点击画布即可显示隐藏的工具栏',0
+;szCursorFile       db        'erase.cur',0
 ;============================================
 
 ;============================================
@@ -167,6 +182,7 @@ _Resize endp
 OptionProc proc hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
 ;============================================
 	LOCAL clr:CHOOSECOLOR
+	LOCAL @szBuffer[40]:byte
 	.if uMsg==WM_INITDIALOG
 	.elseif uMsg==WM_COMMAND
 		mov eax,wParam
@@ -244,6 +260,22 @@ OptionProc proc hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
 			.elseif ax == IDC_EMPTYBOX
 				invoke SetDlgItemText,hWnd,IDC_TYPEEDIT,ADDR empty
 				mov FillType, _empty
+			.elseif ax == ID_SAVE
+				invoke SaveFile, hWinMain, lastBmp
+				invoke EndDialog,hWnd,0
+			.elseif ax == ID_NO
+				invoke EndDialog,hWnd,0
+			.elseif ax == IDTEXT
+				invoke GetDlgItemText,hWnd,IDC_CUSTOMTEXT, addr @szBuffer, sizeof @szBuffer
+				mov szTextLength, edx
+				mov edi,0
+				mov ecx,szTextLength
+				L:
+				mov al,@szBuffer[edi]
+				mov szText[edi],al
+				inc edi
+				loop L
+				invoke EndDialog,hWnd,0
 			.endif
 	.elseif uMsg==WM_CTLCOLORSTATIC
 		invoke GetDlgItem,hWnd,IDC_BACKCOLORBOX
@@ -284,6 +316,12 @@ _InterfacePainting proc
 	mov edx, FillType
 	mov gFillType, edx
 
+	mov edx, offset szText
+	mov _szText, edx
+
+	mov edx, szTextLength
+	mov _szTextLength, edx
+
 	ret
 _InterfacePainting endp
 
@@ -312,6 +350,7 @@ SaveImage proc path:DWORD, SaveBitmap:DWORD
 	local @bitmap:BITMAP
 	local @imgData:dword
 	local @FileHandler:dword, @byteWritten:dword
+	local @ByteShift:dword, @OldSize:dword
 	invoke GetObject, SaveBitmap, sizeof BITMAP, addr @bitmap
 
     ;BITMAPINFOHEADER
@@ -336,6 +375,20 @@ SaveImage proc path:DWORD, SaveBitmap:DWORD
 	mov @imgData, eax
 	;Get BMP Bits
 	invoke GetDIBits, hDc, SaveBitmap, 0, InfoHeader.biHeight, @imgData ,addr InfoHeader, DIB_RGB_COLORS
+	xor eax,eax
+	xor edx,edx
+	mov eax,InfoHeader.biSizeImage
+	mov @OldSize,eax
+	div InfoHeader.biHeight
+	mov ebx,50
+	mul ebx
+	mov @ByteShift,eax
+	mov eax, InfoHeader.biSizeImage
+	sub eax, @ByteShift
+	mov InfoHeader.biSizeImage, eax
+	mov eax,InfoHeader.biHeight
+	sub eax,50
+	mov InfoHeader.biHeight,eax
 	;CreateFile
     invoke CreateFile, path, GENERIC_WRITE,0,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL or FILE_FLAG_SEQUENTIAL_SCAN,NULL
     mov @FileHandler,eax
@@ -345,10 +398,8 @@ SaveImage proc path:DWORD, SaveBitmap:DWORD
 	;WriteFile
     invoke WriteFile, @FileHandler, addr FileHeader, sizeof BITMAPFILEHEADER,addr @byteWritten,NULL
     invoke WriteFile, @FileHandler, addr InfoHeader, sizeof BITMAPINFOHEADER,addr @byteWritten,NULL
-    invoke WriteFile,@FileHandler, @imgData, InfoHeader.biSizeImage, addr @byteWritten, NULL
-	;invoke DeleteDC, @tempDc
-	;invoke DeleteObject, @tempBmp
-	invoke VirtualFree, @imgData, InfoHeader.biSizeImage, MEM_COMMIT
+    invoke WriteFile, @FileHandler, @imgData, InfoHeader.biSizeImage, addr @byteWritten, NULL
+	invoke VirtualFree, @imgData, @OldSize, MEM_COMMIT
 	invoke CloseHandle, @FileHandler
     ret
 
@@ -479,6 +530,7 @@ _ProcWinMain    proc     uses ebx edi esi hWnd ,uMsg,wParam,lParam
        LOCAL    @szBuffer[128]:byte
        mov      eax,uMsg
        .if      uMsg  ==  WM_CLOSE
+				invoke	 DialogBoxParam,hInstance,IDD_SAVEDLG,hWnd,addr OptionProc,0
                 invoke   PostMessage,hWnd,WM_COMMAND,IDM_EXIT,0
        .elseif  uMsg  ==  WM_CREATE
 				mov      eax,hWnd
@@ -501,19 +553,41 @@ _ProcWinMain    proc     uses ebx edi esi hWnd ,uMsg,wParam,lParam
 				mov hInstance,eax
                 mov      eax,wParam
                 .if      ax  ==  IDM_EXIT
+					invoke	 DialogBoxParam,hInstance,IDD_SAVEDLG,hWnd,addr OptionProc,0
 					 invoke  DestroyWindow,hWinMain
 					 invoke  PostQuitMessage,NULL
 				.elseif      ax  ==  IDM_COLOR
 					invoke DialogBoxParam,hInstance,IDD_COLORDLG,hWnd,addr OptionProc,0
 				.elseif      ax  ==  IDM_PATTERN
+					invoke  LoadCursor, NULL, IDC_CROSS
+					.if eax
+						mov hCursor, eax
+					.endif
+					invoke SetClassLong, hWnd,GCL_HCURSOR,hCursor
 					invoke DialogBoxParam,hInstance,IDD_PATTERNDLG,hWnd,addr OptionProc,0
 				.elseif    ax == IDM_WIDTH
 					invoke DialogBoxParam,hInstance,IDD_WIDTHDLG,hWnd,addr OptionProc,0
 				.elseif    ax == IDM_PEN
+					invoke  LoadCursor, NULL, IDC_CROSS
+					.if eax
+						mov hCursor, eax
+					.endif
+					invoke SetClassLong, hWnd,GCL_HCURSOR,hCursor
 					mov DrawType, _point
 				.elseif    ax == IDM_ERASE
+					invoke  LoadCursor,NULL,IDC_HAND
+					.if eax
+						mov hCursor, eax
+					.endif
+					invoke SetClassLong, hWnd,GCL_HCURSOR,hCursor
 					mov DrawType, _erase
 				.elseif    ax == IDM_TEXT
+					invoke DialogBoxParam,hInstance,IDD_TEXTDLG,hWnd,addr OptionProc,0
+					invoke  LoadCursor, NULL, IDC_IBEAM
+					.if eax
+						mov hCursor, eax
+					.endif
+					invoke SetClassLong, hWnd,GCL_HCURSOR,hCursor
 					mov DrawType, _text
 				.elseif    ax == IDM_BIG
 					invoke ResizeImage,hDc, 1, 2
@@ -525,16 +599,15 @@ _ProcWinMain    proc     uses ebx edi esi hWnd ,uMsg,wParam,lParam
 					invoke FlipImage,hDc, 2
 				.elseif ax == IDM_S
 					invoke FlipImage,hDc, 3
-				.elseif    ax == IDM_NEW
-					; TO DO
 				.elseif    ax == IDM_SAVE
 					invoke SaveFile, hWinMain, lastBmp
 				.elseif    ax == IDM_OPEN
+					invoke	 DialogBoxParam,hInstance,IDD_SAVEDLG,hWnd,addr OptionProc,0
 					invoke GetDC, hWinMain
 					mov hDc, eax
 					invoke _OpenFile, hWinMain, hDc
 				.elseif    ax == IDM_HELP
-					; TO DO
+					invoke MessageBox, NULL, addr szHelp, addr szHelpCaption, MB_OK 
 				.endif
 		.elseif  uMsg  ==  WM_SIZE
 				call     _Resize

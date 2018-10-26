@@ -13,6 +13,8 @@ ReadyPaint		DWORD	0			; 0 -> no click yet
 PaintOver		DWORD	0			; 0 -> not over
 PaintType		DWORD	1			; 0 -> eraser; 1 -> pen; 2 -> draw line; 3 -> draw rectangle; 4 -> roundRectangle; 5 -> draw ellipse
 gFillType		DWORD	0
+_szText         LPCTSTR ?
+_szTextLength     DWORD ?
 lastPoint POINT <0, 0>
 fixedPoint POINT <0, 0>
 lastPointGraphics POINT <0, 0>
@@ -232,6 +234,42 @@ _DrawLine PROC hWnd:HWND, hdc:HDC, x:DWORD, y:DWORD
 _DrawLine ENDP
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+; draw text
+_DrawText PROC hdc:HDC, text:LPCTSTR, textLen:DWORD, x:DWORD, y:DWORD
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+	LOCAL pen
+	LOCAL @rect:RECT
+
+	invoke BitBlt, hdc, 0, 0, SCREENWIDTH, SCREENHEIGHT, lastHdc, 0, 0, SRCCOPY
+	
+	; paint
+	invoke CreatePen, PS_SOLID, gPenWidth, gPenColor
+	mov pen, eax
+	invoke SelectObject, hdc, pen;
+	invoke DeleteObject, eax
+
+	mov eax, x
+	mov @rect.left, eax
+	add eax, 40
+	mov @rect.right, eax
+	mov eax, y
+	mov @rect.top, eax
+	add eax, 20
+	mov @rect.bottom, eax
+
+	;invoke TextOut,hdc,hitpoint.x,hitpoint.y,text,textLen
+	invoke DrawText, hdc, text, textLen,ADDR @rect, DT_CENTER
+	invoke DeleteObject, pen
+	
+	mov eax, x
+	mov lastPoint.x, eax
+	mov eax, y
+	mov lastPoint.y, eax
+	
+	ret
+_DrawText ENDP
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; draw rectangle; fillFlag 0 -> null 1 -> fill
 _DrawRect PROC hWnd:HWND, hdc:HDC, x:DWORD, y:DWORD, fillFlag:DWORD
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -373,6 +411,8 @@ _GDIDraw PROC hWnd:HWND
 			invoke _DrawRoundRect, hWnd, memDc, hitpoint.x, hitpoint.y, 1
 		.ELSEIF PaintType==5
 			invoke _DrawEllipse, hWnd, memDc, hitpoint.x, hitpoint.y, 1
+		.ELSEIF PaintType==6
+			invoke _DrawText, hWnd, _szText, _szTextLength, hitpoint.x, hitpoint.y
 		.ENDIF
 		
 		invoke BitBlt, hdc, 0, 0, SCREENWIDTH, SCREENHEIGHT, memDc, 0, 0, SRCCOPY	

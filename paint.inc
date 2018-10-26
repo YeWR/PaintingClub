@@ -29,6 +29,9 @@ includelib     gdi32.lib
 						gPaintPoint: POINT,
 						SCREENWIDTH: DWORD,
 						SCREENHEIGHT: DWORD,
+						_szText:LPCTSTR
+
+	externdef  	_szTextLength:DWORD,
 						hitpoint: POINT,	
 						lastHdc: HDC,			
 						lastBmp: HBITMAP		
@@ -50,5 +53,6 @@ includelib     gdi32.lib
 		_LeftButtonDown PROTO hWnd:HWND, lParam:LPARAM
 		_LeftButtonUp PROTO hWnd:HWND, lParam:LPARAM
 		_MouseMove PROTO hWnd:HWND, lParam:LPARAM
+		_DrawText PROTO hdc:HDC, text:LPCTSTR, textLen:DWORD, x:DWORD, y:DWORD
 
 	ENDIF
