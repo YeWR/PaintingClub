@@ -14,7 +14,7 @@ includelib      Comdlg32.lib
 include         gdi32.inc
 includelib     gdi32.lib
 
-	externdef 		ReadyPaint: DWORD,
+	externdef 	ReadyPaint: DWORD,
 						PaintOver: DWORD,	
 						PaintType: DWORD,	
 						gFillType: DWORD,
@@ -29,9 +29,6 @@ includelib     gdi32.lib
 						gPaintPoint: POINT,
 						SCREENWIDTH: DWORD,
 						SCREENHEIGHT: DWORD,
-						_szText:LPCTSTR
-
-	externdef  	_szTextLength:DWORD,
 						hitpoint: POINT,	
 						lastHdc: HDC,			
 						lastBmp: HBITMAP		

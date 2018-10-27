@@ -5,16 +5,12 @@ option casemap:none
 
 include			paint.inc
 
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-;
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 .data
-ReadyPaint		DWORD	0			; 0 -> no click yet
+ReadyPaint		DWORD	0		; 0 -> no click yet
 PaintOver		DWORD	0			; 0 -> not over
 PaintType		DWORD	1			; 0 -> eraser; 1 -> pen; 2 -> draw line; 3 -> draw rectangle; 4 -> roundRectangle; 5 -> draw ellipse
 gFillType		DWORD	0
-_szText         LPCTSTR ?
-_szTextLength     DWORD ?
 lastPoint POINT <0, 0>
 fixedPoint POINT <0, 0>
 lastPointGraphics POINT <0, 0>
@@ -26,17 +22,21 @@ gEraserColor	DWORD	0		; ÏðÆ¤²ÁÑÕÉ«
 gPaintPoint		POINT	<>	; left up point
 SCREENWIDTH		DWORD	0
 SCREENHEIGHT	DWORD	0
+;============================================
 
+;============================================
+;¶¨Òå¾ä±ú
 .data?
 hitpoint 		POINT		<>			
 lastHdc			HDC			?
 lastBmp			HBITMAP		?
+;============================================
 
 .code
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 ; set color with r, g, b
 _SetColor PROC r:DWORD, g:DWORD, b:DWORD
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 	mov ebx, 0
 	mov eax, 10000h
 	mul b
@@ -48,12 +48,12 @@ _SetColor PROC r:DWORD, g:DWORD, b:DWORD
 	add eax, ebx
 	ret
 _SetColor ENDP
+;============================================
 
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 ; set screen w and h
 _SetScreenWH PROC hWnd:HWND
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
+;============================================
 	LOCAL @rect:RECT
 
 	; get the rect
@@ -71,11 +71,12 @@ _SetScreenWH PROC hWnd:HWND
 
 	ret
 _SetScreenWH ENDP
+;============================================
 
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 ; set the last dc
 _SetLastDc PROC hWnd:HWND
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 	LOCAL hdc:HDC
 	
 	; clear the lastBmp
@@ -100,11 +101,12 @@ _SetLastDc PROC hWnd:HWND
 	
 	ret
 _SetLastDc ENDP
+;============================================
 
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 ; initialize everything
 _Initialization PROC hWnd:HWND
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 	LOCAL hdc:HDC
 	mov gPaintPoint.x, 20
 	mov gPaintPoint.y, 20
@@ -132,11 +134,12 @@ _Initialization PROC hWnd:HWND
 	invoke _ReDraw, hWnd
 	ret
 _Initialization ENDP
+;============================================
 
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 ; re draw
 _ReDraw PROC hWnd:HWND
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 	LOCAL hdc:HDC
 	LOCAL memDc:HDC
 	LOCAL memBmp:HBITMAP
@@ -162,11 +165,12 @@ _ReDraw PROC hWnd:HWND
 	invoke ReleaseDC, hWnd, hdc
 	ret
 _ReDraw ENDP
+;============================================
 
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 ; erase with gEraser
 _Erase PROC hdc:HDC, x:DWORD, y:DWORD
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 	LOCAL eraser
 	
 	invoke CreatePen, PS_SOLID, gEraserWidth, gEraserColor
@@ -184,11 +188,12 @@ _Erase PROC hdc:HDC, x:DWORD, y:DWORD
 	mov lastPoint.y, eax
 	ret
 _Erase ENDP
+;============================================
 
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 ; draw anything
 _Draw PROC hdc:HDC, x:DWORD, y:DWORD
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 	LOCAL pen
 	
 	invoke CreatePen, PS_SOLID, gPenWidth, gPenColor
@@ -206,11 +211,12 @@ _Draw PROC hdc:HDC, x:DWORD, y:DWORD
 	mov lastPoint.y, eax
 	ret
 _Draw ENDP
+;============================================
 
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 ; draw line
 _DrawLine PROC hWnd:HWND, hdc:HDC, x:DWORD, y:DWORD
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 	LOCAL pen
 
 	invoke BitBlt, hdc, 0, 0, SCREENWIDTH, SCREENHEIGHT, lastHdc, 0, 0, SRCCOPY
@@ -232,47 +238,12 @@ _DrawLine PROC hWnd:HWND, hdc:HDC, x:DWORD, y:DWORD
 	
 	ret
 _DrawLine ENDP
+;============================================
 
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-; draw text
-_DrawText PROC hdc:HDC, text:LPCTSTR, textLen:DWORD, x:DWORD, y:DWORD
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-	LOCAL pen
-	LOCAL @rect:RECT
-
-	invoke BitBlt, hdc, 0, 0, SCREENWIDTH, SCREENHEIGHT, lastHdc, 0, 0, SRCCOPY
-	
-	; paint
-	invoke CreatePen, PS_SOLID, gPenWidth, gPenColor
-	mov pen, eax
-	invoke SelectObject, hdc, pen;
-	invoke DeleteObject, eax
-
-	mov eax, x
-	mov @rect.left, eax
-	add eax, 40
-	mov @rect.right, eax
-	mov eax, y
-	mov @rect.top, eax
-	add eax, 20
-	mov @rect.bottom, eax
-
-	;invoke TextOut,hdc,hitpoint.x,hitpoint.y,text,textLen
-	invoke DrawText, hdc, text, textLen,ADDR @rect, DT_CENTER
-	invoke DeleteObject, pen
-	
-	mov eax, x
-	mov lastPoint.x, eax
-	mov eax, y
-	mov lastPoint.y, eax
-	
-	ret
-_DrawText ENDP
-
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 ; draw rectangle; fillFlag 0 -> null 1 -> fill
 _DrawRect PROC hWnd:HWND, hdc:HDC, x:DWORD, y:DWORD, fillFlag:DWORD
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 	LOCAL brush
 	LOCAL pen
 	
@@ -302,11 +273,12 @@ _DrawRect PROC hWnd:HWND, hdc:HDC, x:DWORD, y:DWORD, fillFlag:DWORD
 	
 	ret
 _DrawRect ENDP
+;============================================
 
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 ; draw roundRectangle; fillFlag 0 -> null 1 -> fill
 _DrawRoundRect PROC hWnd:HWND, hdc:HDC, x:DWORD, y:DWORD, fillFlag:DWORD
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 	LOCAL brush
 	LOCAL pen
 	LOCAL w
@@ -341,11 +313,12 @@ _DrawRoundRect PROC hWnd:HWND, hdc:HDC, x:DWORD, y:DWORD, fillFlag:DWORD
 	
 	ret
 _DrawRoundRect ENDP
+;============================================
 
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 ; draw ellipse; fillFlag 0 -> null 1 -> fill
 _DrawEllipse PROC hWnd:HWND, hdc:HDC, x:DWORD, y:DWORD, fillFlag:DWORD
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 	LOCAL brush
 	LOCAL pen
 	
@@ -375,8 +348,11 @@ _DrawEllipse PROC hWnd:HWND, hdc:HDC, x:DWORD, y:DWORD, fillFlag:DWORD
 	
 	ret
 _DrawEllipse ENDP
+;============================================
 
+;============================================
 _GDIDraw PROC hWnd:HWND
+;============================================
 	LOCAL hdc:HDC
 	LOCAL memDc:HDC		; for double buffering
 	LOCAL memBmp:HBITMAP
@@ -411,8 +387,6 @@ _GDIDraw PROC hWnd:HWND
 			invoke _DrawRoundRect, hWnd, memDc, hitpoint.x, hitpoint.y, 1
 		.ELSEIF PaintType==5
 			invoke _DrawEllipse, hWnd, memDc, hitpoint.x, hitpoint.y, 1
-		.ELSEIF PaintType==6
-			invoke _DrawText, hWnd, _szText, _szTextLength, hitpoint.x, hitpoint.y
 		.ENDIF
 		
 		invoke BitBlt, hdc, 0, 0, SCREENWIDTH, SCREENHEIGHT, memDc, 0, 0, SRCCOPY	
@@ -428,8 +402,11 @@ _GDIDraw PROC hWnd:HWND
 	.ENDIF
 	ret
 _GDIDraw ENDP
+;============================================
 
+;============================================
 _LeftButtonDown PROC hWnd:HWND, lParam:LPARAM
+;============================================
 	mov eax,lParam
 	and eax,0ffffh
 	mov hitpoint.x,eax
@@ -450,15 +427,20 @@ _LeftButtonDown PROC hWnd:HWND, lParam:LPARAM
 	invoke InvalidateRect,hWnd,NULL,TRUE
 	ret
 _LeftButtonDown ENDP
+;============================================
 
+;============================================
 _LeftButtonUp PROC hWnd:HWND, lParam:LPARAM
-	
+;============================================
 	invoke _SetLastDc, hWnd
 	mov ReadyPaint,FALSE	
 	ret
 _LeftButtonUp ENDP
+;============================================
 
+;============================================
 _MouseMove PROC hWnd:HWND, lParam:LPARAM
+;============================================
 	LOCAL pt:POINT
 	
 	mov pt.x, 10
@@ -500,6 +482,6 @@ _MouseMove PROC hWnd:HWND, lParam:LPARAM
 	.ENDIF
 	ret
 _MouseMove ENDP
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;============================================
 ENDIF
 end

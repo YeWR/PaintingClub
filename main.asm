@@ -2,7 +2,7 @@
 .model flat, stdcall
 option casemap :none
 
-include			paint.inc
+include	 paint.inc
 
 LoadFile PROTO path:DWORD, DC:DWORD
 SaveImage PROTO path:DWORD, SaveBitmap:DWORD
@@ -70,9 +70,6 @@ IDC_FOURBOX      equ     3007
 IDC_EIGHTBOX     equ     3008
 IDC_WIDTHEDIT   equ     3009
 
-IDD_TEXTDLG             equ     106
-IDC_CUSTOMTEXT       equ    6001
-IDTEXT                       equ     6002
 
 IDD_SAVEDLG                equ   107
 ID_SAVE                         equ 7001
@@ -82,7 +79,6 @@ MAX_FILE equ 260
 ;============================================
 _point               equ 1
 _erase               equ 0
-_text                 equ 6
 _circle               equ 5
 _line                 equ 2
 _cirTang            equ 4
@@ -115,13 +111,11 @@ FileHeader BITMAPFILEHEADER <>
 InfoHeader BITMAPINFOHEADER <>
 ;============================================
 ; 定义绘图关键变量
-BackgroundColor dd 0FFFFFFh
-ForegroundColor dd 0FFFFFFh	
 LineWidth            dd 1
 DrawType            dd _point ;详见.const定义 
 FillType                dd _empty
-szText         byte 40 dup(0),0
-szTextLength       dd ?
+BackgroundColor dd 0FFFFFFh
+ForegroundColor dd 0FFFFFFh	
 ;============================================
 
 .const
@@ -139,11 +133,12 @@ four             db '4px',0
 eight            db '8px',0
 szFileName  db MAX_PATH dup(?)
 szClass         db "EDIT",0
-szClassName     db       "PAINT",0
-szCaptionMain   db       '画图',0
-szHelpCaption    db        '帮助',0
-szHelp                db       '点击画布即可显示隐藏的工具栏',0
-;szCursorFile       db        'erase.cur',0
+szClassName                   db       "PAINT",0
+szCaptionMain                db       '画图',0
+szHelpCaption                db        '帮助',0
+szHelp                             db       '点击画布即可显示隐藏的工具栏',0
+szColor                            db    '背景色无法修改,可修改前景色',0
+szColorCaption               db    '背景色',0
 ;============================================
 
 ;============================================
@@ -152,12 +147,11 @@ stToolbar         equ     this byte
 TBBUTTON        <0,IDM_PEN,TBSTATE_ENABLED,TBSTYLE_BUTTON,0,0,-1>
 TBBUTTON        <1,IDM_ERASE,TBSTATE_ENABLED,TBSTYLE_BUTTON,0,0,-1>
 TBBUTTON        <2,IDM_PATTERN,TBSTATE_ENABLED,TBSTYLE_BUTTON,0,0,-1>
-TBBUTTON        <3,IDM_TEXT,TBSTATE_ENABLED,TBSTYLE_BUTTON,0,0,-1>
 TBBUTTON        <0,0,TBSTATE_ENABLED,TBSTYLE_SEP,0,0,-1>
 TBBUTTON        <4,IDM_WIDTH,TBSTATE_ENABLED,TBSTYLE_BUTTON,0,0,-1>
 TBBUTTON        <5,IDM_COLOR,TBSTATE_ENABLED,TBSTYLE_BUTTON,0,0,-1>
 TBBUTTON        <0,0,TBSTATE_ENABLED,TBSTYLE_SEP,0,0,-1>
-NUM_BUTTONS          equ  8
+NUM_BUTTONS          equ  7
 ;============================================
 
 .code
@@ -165,17 +159,18 @@ NUM_BUTTONS          equ  8
 ; 调节子窗口位置
 _Resize         proc
 ;============================================
-       LOCAL    @stRect:RECT,@stRect1:RECT
-       invoke   SendMessage,hWinToolbar,TB_AUTOSIZE,0,0
-       invoke   GetClientRect,hWinMain,addr @stRect
-       invoke   GetWindowRect,hWinToolbar,addr @stRect1
-       mov      eax,@stRect1.bottom
-       sub      eax,@stRect1.top
-       mov      ecx,@stRect.bottom
-       sub      ecx,eax
-       invoke   MoveWindow,hWinEdit,0,eax,@stRect.right,ecx,TRUE       
-       ret
+	LOCAL    @stRect:RECT,@stRect1:RECT
+	invoke   SendMessage,hWinToolbar,TB_AUTOSIZE,0,0
+	invoke   GetClientRect,hWinMain,addr @stRect
+	invoke   GetWindowRect,hWinToolbar,addr @stRect1
+	mov      eax,@stRect1.bottom
+	sub      eax,@stRect1.top
+	mov      ecx,@stRect.bottom
+	sub      ecx,eax
+	invoke   MoveWindow,hWinEdit,0,eax,@stRect.right,ecx,TRUE       
+	ret
 _Resize endp 
+;============================================
 
 ;============================================
 ; 处理对话框事件，包括颜色选择、线宽选择以及图案选择
@@ -183,110 +178,88 @@ OptionProc proc hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
 ;============================================
 	LOCAL clr:CHOOSECOLOR
 	LOCAL @szBuffer[40]:byte
-	.if uMsg==WM_INITDIALOG
+	.IF uMsg == WM_CREATE
+		invoke GetDlgItem,hWnd,IDC_FORECOLORBOX
+		invoke InvalidateRect,eax,0FFFFFFh,TRUE
+	.elseif uMsg==WM_INITDIALOG
 	.elseif uMsg==WM_COMMAND
 		mov eax,wParam
 		shr eax,16
 		.if ax==BN_CLICKED
-			mov eax,wParam
+		mov eax,wParam
+	.endif
+	.if ax==IDC_BACKCOLORBOX
+		invoke GetDlgItem,hWnd,IDC_BACKCOLORBOX
+		invoke InvalidateRect,eax,0,TRUE
+		invoke MessageBox, NULL, addr szColor, addr szColorCaption, MB_OK 
+	.elseif ax==IDC_FORECOLORBOX
+		invoke RtlZeroMemory,addr clr,sizeof clr
+		mov clr.lStructSize,sizeof clr
+		push hWnd
+		pop clr.hwndOwner
+		invoke GetModuleHandle,NULL
+		mov hInstance,eax
+		push hInstance
+		pop clr.hInstance
+		push ForegroundColor
+		pop clr.rgbResult
+		mov clr.lpCustColors,offset CustomColors
+		mov clr.Flags,CC_ANYCOLOR or CC_RGBINIT
+		invoke ChooseColor,addr clr
+			.if eax!=0
+				push clr.rgbResult
+				pop ForegroundColor
+				invoke GetDlgItem,hWnd,IDC_FORECOLORBOX
+				invoke InvalidateRect,eax,0,TRUE
 			.endif
-			.if ax==IDC_BACKCOLORBOX
-				invoke RtlZeroMemory,addr clr,sizeof clr
-				mov clr.lStructSize,sizeof clr
-				push hWnd
-				pop clr.hwndOwner
-				push hInstance
-				pop clr.hInstance
-				push BackgroundColor
-				pop clr.rgbResult
-				mov clr.lpCustColors,offset CustomColors
-				mov clr.Flags,CC_ANYCOLOR or CC_RGBINIT
-				invoke ChooseColor,addr clr
-				.if eax!=0
-					push clr.rgbResult
-					pop BackgroundColor
-					invoke GetDlgItem,hWnd,IDC_BACKCOLORBOX
-					invoke InvalidateRect,eax,0,TRUE
-				.endif
-			.elseif ax==IDC_FORECOLORBOX
-				invoke RtlZeroMemory,addr clr,sizeof clr
-				mov clr.lStructSize,sizeof clr
-				push hWnd
-				pop clr.hwndOwner
-				invoke GetModuleHandle,NULL
-				mov hInstance,eax
-				push hInstance
-				pop clr.hInstance
-				push ForegroundColor
-				pop clr.rgbResult
-				mov clr.lpCustColors,offset CustomColors
-				mov clr.Flags,CC_ANYCOLOR or CC_RGBINIT
-				invoke ChooseColor,addr clr
-				.if eax!=0
-					push clr.rgbResult
-					pop ForegroundColor
-					invoke GetDlgItem,hWnd,IDC_FORECOLORBOX
-					invoke InvalidateRect,eax,0,TRUE
-				.endif
-			.elseif ax==IDOK
-				invoke EndDialog,hWnd,0
-			.elseif ax ==IDC_ONEBOX
-				invoke SetDlgItemText,hWnd,IDC_WIDTHEDIT,ADDR one
-				mov LineWidth, 1
-			.elseif ax ==IDC_TWOBOX
-				invoke SetDlgItemText,hWnd,IDC_WIDTHEDIT,ADDR two
-				mov LineWidth, 2
-			.elseif ax ==IDC_FOURBOX
-				invoke SetDlgItemText,hWnd,IDC_WIDTHEDIT,ADDR four
-				mov LineWidth, 4
-			.elseif ax ==IDC_EIGHTBOX
-				invoke SetDlgItemText,hWnd,IDC_WIDTHEDIT,ADDR eight
-				mov LineWidth, 8
-			.elseif ax ==IDC_LINEBOX
-				invoke SetDlgItemText,hWnd,IDC_PATTERNEDIT,ADDR line
-				mov DrawType, _line
-			.elseif ax ==IDC_CIRCLEBOX
-				invoke SetDlgItemText,hWnd,IDC_PATTERNEDIT,ADDR circle
-				mov DrawType, _circle
-			.elseif ax ==IDC_CIRTANGBOX
-				invoke SetDlgItemText,hWnd,IDC_PATTERNEDIT,ADDR cirTang
-				mov DrawType, _cirTang
-			.elseif ax ==IDC_RECTBOX
-				invoke SetDlgItemText,hWnd,IDC_PATTERNEDIT,ADDR rect
-				mov DrawType, _rect
-			.elseif ax == IDC_FULLBOX
-				invoke SetDlgItemText,hWnd,IDC_TYPEEDIT,ADDR full
-				mov FillType, _full
-			.elseif ax == IDC_EMPTYBOX
-				invoke SetDlgItemText,hWnd,IDC_TYPEEDIT,ADDR empty
-				mov FillType, _empty
-			.elseif ax == ID_SAVE
-				invoke SaveFile, hWinMain, lastBmp
-				invoke EndDialog,hWnd,0
-			.elseif ax == ID_NO
-				invoke EndDialog,hWnd,0
-			.elseif ax == IDTEXT
-				invoke GetDlgItemText,hWnd,IDC_CUSTOMTEXT, addr @szBuffer, sizeof @szBuffer
-				mov szTextLength, edx
-				mov edi,0
-				mov ecx,szTextLength
-				L:
-				mov al,@szBuffer[edi]
-				mov szText[edi],al
-				inc edi
-				loop L
-				invoke EndDialog,hWnd,0
-			.endif
+		.elseif ax==IDOK
+			invoke EndDialog,hWnd,0
+		.elseif ax ==IDC_ONEBOX
+			invoke SetDlgItemText,hWnd,IDC_WIDTHEDIT,ADDR one
+			mov LineWidth, 1
+		.elseif ax ==IDC_TWOBOX
+			invoke SetDlgItemText,hWnd,IDC_WIDTHEDIT,ADDR two
+			mov LineWidth, 2
+		.elseif ax ==IDC_FOURBOX
+			invoke SetDlgItemText,hWnd,IDC_WIDTHEDIT,ADDR four
+			mov LineWidth, 4
+		.elseif ax ==IDC_EIGHTBOX
+			invoke SetDlgItemText,hWnd,IDC_WIDTHEDIT,ADDR eight
+			mov LineWidth, 8
+		.elseif ax ==IDC_LINEBOX
+			invoke SetDlgItemText,hWnd,IDC_PATTERNEDIT,ADDR line
+			mov DrawType, _line
+		.elseif ax ==IDC_CIRCLEBOX
+			invoke SetDlgItemText,hWnd,IDC_PATTERNEDIT,ADDR circle
+			mov DrawType, _circle
+		.elseif ax ==IDC_CIRTANGBOX
+			invoke SetDlgItemText,hWnd,IDC_PATTERNEDIT,ADDR cirTang
+			mov DrawType, _cirTang
+		.elseif ax ==IDC_RECTBOX
+			invoke SetDlgItemText,hWnd,IDC_PATTERNEDIT,ADDR rect
+			mov DrawType, _rect
+		.elseif ax == IDC_FULLBOX
+			invoke SetDlgItemText,hWnd,IDC_TYPEEDIT,ADDR full
+			mov FillType, _full
+		.elseif ax == IDC_EMPTYBOX
+			invoke SetDlgItemText,hWnd,IDC_TYPEEDIT,ADDR empty
+			mov FillType, _empty
+		.elseif ax == ID_SAVE
+			invoke SaveFile, hWinMain, lastBmp
+			invoke EndDialog,hWnd,0
+		.elseif ax == ID_NO
+			invoke EndDialog,hWnd,0
+		.ENDIF
 	.elseif uMsg==WM_CTLCOLORSTATIC
 		invoke GetDlgItem,hWnd,IDC_BACKCOLORBOX
 		.if eax==lParam
-			invoke CreateSolidBrush,BackgroundColor			
+			invoke CreateSolidBrush, 0FFFFFFh			
 			ret
 		.else
 			invoke GetDlgItem,hWnd,IDC_FORECOLORBOX
 			.if eax==lParam
-				invoke CreateSolidBrush,ForegroundColor
-				ret
+			invoke CreateSolidBrush,ForegroundColor
+			ret
 			.endif
 		.endif
 		mov eax,FALSE
@@ -297,11 +270,15 @@ OptionProc proc hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
 		mov eax,FALSE
 		ret
 	.endif
-	mov eax,TRUE
-	ret
+mov eax,TRUE
+ret
 OptionProc endp
+;============================================
 
+;============================================
+; 定义接口
 _InterfacePainting proc
+;============================================
 	mov edx, DrawType
 	mov PaintType, edx
 
@@ -316,19 +293,14 @@ _InterfacePainting proc
 	mov edx, FillType
 	mov gFillType, edx
 
-	mov edx, offset szText
-	mov _szText, edx
-
-	mov edx, szTextLength
-	mov _szTextLength, edx
-
 	ret
 _InterfacePainting endp
-
 ;============================
 
+;============================================
+; 加载文件
 LoadFile proc path:DWORD, DC:DWORD
-
+;============================================
     local @bitmap:BITMAP
 	local @tempDc:dword
     invoke LoadImage, hInstance, path, IMAGE_BITMAP,0,0,LR_LOADFROMFILE	
@@ -345,8 +317,12 @@ LoadFile proc path:DWORD, DC:DWORD
 	
     ret
 LoadFile endp
+;============================================
 
+;============================================
+;保存图片
 SaveImage proc path:DWORD, SaveBitmap:DWORD
+;============================================
 	local @bitmap:BITMAP
 	local @imgData:dword
 	local @FileHandler:dword, @byteWritten:dword
@@ -402,10 +378,13 @@ SaveImage proc path:DWORD, SaveBitmap:DWORD
 	invoke VirtualFree, @imgData, @OldSize, MEM_COMMIT
 	invoke CloseHandle, @FileHandler
     ret
-
 SaveImage endp
+;============================================
 
+;============================================
+;打开文件
 _OpenFile proc hParent:DWORD, DC:DWORD
+;============================================
     mov ofn.lStructSize,		sizeof ofn 
     mov ofn.lStructSize,        sizeof ofn
     mov eax, hParent
@@ -423,7 +402,9 @@ _OpenFile proc hParent:DWORD, DC:DWORD
     .endif
     ret
 _OpenFile endp
+;============================================
 
+;============================================
 SaveFile proc hParent:DWORD, SaveBitmap:DWORD
 	mov ofn.lStructSize,        SIZEOF ofn 
 	mov ofn.lStructSize,        sizeof ofn
@@ -441,9 +422,10 @@ SaveFile proc hParent:DWORD, SaveBitmap:DWORD
 		invoke SaveImage, addr ofn_fileName, SaveBitmap
 	.endif
     ret
-
 SaveFile endp
+;============================================
 
+;============================================
 ResizeImage proc DC:DWORD, Mode:DWORD, Ratio:WORD
 	local @bitmap:BITMAP
 	local @tempDc:dword
@@ -479,15 +461,15 @@ ResizeImage proc DC:DWORD, Mode:DWORD, Ratio:WORD
 	invoke StretchBlt,DC,0,50,@printWidth,@printHeight,@tempDc,0,0,@bitmap.bmWidth,@bitmap.bmHeight,SRCCOPY
 	
 	invoke DeleteDC, @tempDc
-
 	invoke _SetLastDc, hWinMain
-
     ret
-
 ResizeImage endp
+;============================================
 
+;============================================
+;翻转图片
 FlipImage proc DC:DWORD, Mode:DWORD
-
+;============================================
 	local @bitmap:BITMAP
 	local @tempDc:dword
 	local @printWidth:dword, @printHeight:dword
@@ -517,9 +499,7 @@ FlipImage proc DC:DWORD, Mode:DWORD
 	invoke DeleteDC, @tempDc
 
 	invoke _SetLastDc, hWinMain
-
     ret
-
 FlipImage endp
 ;============================
 
@@ -527,147 +507,139 @@ FlipImage endp
 ; 处理主窗口事件循环，包括绘制以及菜单栏的点击
 _ProcWinMain    proc     uses ebx edi esi hWnd ,uMsg,wParam,lParam
 ;============================================
-       LOCAL    @szBuffer[128]:byte
-       mov      eax,uMsg
-       .if      uMsg  ==  WM_CLOSE
-				invoke	 DialogBoxParam,hInstance,IDD_SAVEDLG,hWnd,addr OptionProc,0
-                invoke   PostMessage,hWnd,WM_COMMAND,IDM_EXIT,0
-       .elseif  uMsg  ==  WM_CREATE
-				mov      eax,hWnd
-				mov      hWinMain,eax
-				invoke   CreateWindowEx,WS_EX_CLIENTEDGE,addr szClass,NULL,WS_DISABLED or WS_CHILD or WS_VISIBLE or ES_MULTILINE,0,0,0,0,hWnd,ID_EDIT,hInstance,NULL
-				mov      hWinEdit,eax
-				invoke GetModuleHandle,NULL
-				mov hInstance,eax
-				invoke  LoadBitmap, hInstance, IDB_BUTTON
-				.if eax
-					mov hbmp,eax
-				.endif
-				invoke   CreateToolbarEx,hWnd,WS_VISIBLE or WS_CHILD or TBSTYLE_FLAT or TBSTYLE_TOOLTIPS or\
-						 CCS_ADJUSTABLE,ID_TOOLBAR,6,0,hbmp,offset stToolbar,\
-						 NUM_BUTTONS,26,25,150,25,sizeof TBBUTTON
-				mov      hWinToolbar,eax
-				call     _Resize
-       .elseif  uMsg  ==  WM_COMMAND
-				invoke GetModuleHandle,NULL
-				mov hInstance,eax
-                mov      eax,wParam
-                .if      ax  ==  IDM_EXIT
-					invoke	 DialogBoxParam,hInstance,IDD_SAVEDLG,hWnd,addr OptionProc,0
-					 invoke  DestroyWindow,hWinMain
-					 invoke  PostQuitMessage,NULL
-				.elseif      ax  ==  IDM_COLOR
-					invoke DialogBoxParam,hInstance,IDD_COLORDLG,hWnd,addr OptionProc,0
-				.elseif      ax  ==  IDM_PATTERN
-					invoke  LoadCursor, NULL, IDC_CROSS
-					.if eax
-						mov hCursor, eax
-					.endif
-					invoke SetClassLong, hWnd,GCL_HCURSOR,hCursor
-					invoke DialogBoxParam,hInstance,IDD_PATTERNDLG,hWnd,addr OptionProc,0
-				.elseif    ax == IDM_WIDTH
-					invoke DialogBoxParam,hInstance,IDD_WIDTHDLG,hWnd,addr OptionProc,0
-				.elseif    ax == IDM_PEN
-					invoke  LoadCursor, NULL, IDC_CROSS
-					.if eax
-						mov hCursor, eax
-					.endif
-					invoke SetClassLong, hWnd,GCL_HCURSOR,hCursor
-					mov DrawType, _point
-				.elseif    ax == IDM_ERASE
-					invoke  LoadCursor,NULL,IDC_HAND
-					.if eax
-						mov hCursor, eax
-					.endif
-					invoke SetClassLong, hWnd,GCL_HCURSOR,hCursor
-					mov DrawType, _erase
-				.elseif    ax == IDM_TEXT
-					invoke DialogBoxParam,hInstance,IDD_TEXTDLG,hWnd,addr OptionProc,0
-					invoke  LoadCursor, NULL, IDC_IBEAM
-					.if eax
-						mov hCursor, eax
-					.endif
-					invoke SetClassLong, hWnd,GCL_HCURSOR,hCursor
-					mov DrawType, _text
-				.elseif    ax == IDM_BIG
-					invoke ResizeImage,hDc, 1, 2
-				.elseif    ax == IDM_SMALL
-					invoke ResizeImage,hDc, 0, 2
-				.elseif    ax == IDM_H
-					invoke FlipImage,hDc, 1
-				.elseif    ax == IDM_V
-					invoke FlipImage,hDc, 2
-				.elseif ax == IDM_S
-					invoke FlipImage,hDc, 3
-				.elseif    ax == IDM_SAVE
-					invoke SaveFile, hWinMain, lastBmp
-				.elseif    ax == IDM_OPEN
-					invoke	 DialogBoxParam,hInstance,IDD_SAVEDLG,hWnd,addr OptionProc,0
-					invoke GetDC, hWinMain
-					mov hDc, eax
-					invoke _OpenFile, hWinMain, hDc
-				.elseif    ax == IDM_HELP
-					invoke MessageBox, NULL, addr szHelp, addr szHelpCaption, MB_OK 
-				.endif
-		.elseif  uMsg  ==  WM_SIZE
-				call     _Resize
-				invoke _SetScreenWH, hWnd
-				invoke _ReDraw, hWnd
-				invoke UpdateWindow, hWnd
-        .elseif  uMsg  ==  WM_NOTIFY
-					mov      ebx,lParam
-			.if      [ebx + NMHDR.code] == TTN_NEEDTEXT
-					 assume   ebx:ptr TOOLTIPTEXT
-					 mov      eax,[ebx].hdr.idFrom
-					 mov      [ebx].lpszText,eax
-					 push     hInstance
-					 pop      [ebx].hInst
-					 assume  ebx:nothing
-			.elseif  ([ebx + NMHDR.code] == TBN_QUERYINSERT) || ([ebx + NMHDR.code] == TBN_QUERYDELETE)
-					 mov      eax,TRUE
-					 ret
-			.elseif  [ebx + NMHDR.code] ==  TBN_GETBUTTONINFO
-					 assume   ebx:ptr TBNOTIFY
-					 mov      eax,[ebx].iItem
-					 .if      eax < NUM_BUTTONS
-							mov     ecx,sizeof TBBUTTON
-							mul     ecx
-							add     eax,offset stToolbar
-							invoke  RtlMoveMemory,addr [ebx].tbButton,eax,sizeof TBBUTTON
-							invoke  LoadString,hInstance,[ebx].tbButton.idCommand,addr @szBuffer,sizeof @szBuffer
-							lea     eax,@szBuffer
-							mov     [ebx].pszText,eax
-							invoke  lstrlen,addr @szBuffer
-							mov     [ebx].cchText,eax
-							assume  ebx:nothing
-							mov     eax,TRUE
-							ret
-					 .endif
-			.endif
-		.ELSEIF uMsg==WM_DESTROY
-			invoke PostQuitMessage,NULL
-		.ELSEIF uMsg==WM_LBUTTONDOWN
-			invoke _LeftButtonDown, hWnd, lParam
-		.ELSEIF uMsg==WM_MOUSEMOVE
-			invoke _InterfacePainting
-			invoke _MouseMove, hWnd, lParam
-		.ELSEIF uMsg==WM_LBUTTONUP || uMsg==WM_MOUSELEAVE
-			invoke _LeftButtonUp, hWnd, lParam
-		.elseif uMsg==WM_PAINT
-			invoke UpdateWindow, hWnd
-		.ELSEIF uMsg==WM_ERASEBKGND
+	LOCAL    @szBuffer[128]:byte
+	mov      eax,uMsg
+	.if      uMsg  ==  WM_CLOSE
+		invoke	 DialogBoxParam,hInstance,IDD_SAVEDLG,hWnd,addr OptionProc,0
+		invoke   PostMessage,hWnd,WM_COMMAND,IDM_EXIT,0
+	.elseif  uMsg  ==  WM_CREATE
+		mov      eax,hWnd
+		mov      hWinMain,eax
+		invoke   CreateWindowEx,WS_EX_CLIENTEDGE,addr szClass,NULL,WS_DISABLED or WS_CHILD or WS_VISIBLE or ES_MULTILINE,0,0,0,0,hWnd,ID_EDIT,hInstance,NULL
+		mov      hWinEdit,eax
+		invoke GetModuleHandle,NULL
+		mov hInstance,eax
+		invoke  LoadBitmap, hInstance, IDB_BUTTON
+		.if eax
+			mov hbmp,eax
+		.endif
+			invoke   CreateToolbarEx,hWnd,WS_VISIBLE or WS_CHILD or TBSTYLE_FLAT or TBSTYLE_TOOLTIPS or\
+			CCS_ADJUSTABLE,ID_TOOLBAR,6,0,hbmp,offset stToolbar,\
+			NUM_BUTTONS,26,25,150,25,sizeof TBBUTTON
+			mov      hWinToolbar,eax
 			call     _Resize
-			invoke _SetScreenWH, hWnd
-			invoke UpdateWindow, hWnd
-			invoke _ReDraw, hWnd
-			
-		.else
-			invoke    DefWindowProc,hWnd,uMsg,wParam,lParam
+	.elseif  uMsg  ==  WM_COMMAND
+		invoke GetModuleHandle,NULL
+		mov hInstance,eax
+		mov      eax,wParam
+		.if      ax  ==  IDM_EXIT
+			invoke	 DialogBoxParam,hInstance,IDD_SAVEDLG,hWnd,addr OptionProc,0
+			invoke  DestroyWindow,hWinMain
+			invoke  PostQuitMessage,NULL
+		.elseif      ax  ==  IDM_COLOR
+			invoke DialogBoxParam,hInstance,IDD_COLORDLG,hWnd,addr OptionProc,0
+		.elseif      ax  ==  IDM_PATTERN
+			invoke  LoadCursor, NULL, IDC_CROSS
+			.if eax
+			mov hCursor, eax
+			.endif
+			invoke SetClassLong, hWnd,GCL_HCURSOR,hCursor
+			invoke DialogBoxParam,hInstance,IDD_PATTERNDLG,hWnd,addr OptionProc,0
+		.elseif    ax == IDM_WIDTH
+			invoke DialogBoxParam,hInstance,IDD_WIDTHDLG,hWnd,addr OptionProc,0
+		.elseif    ax == IDM_PEN
+			invoke  LoadCursor, NULL, IDC_CROSS
+			.if eax
+			mov hCursor, eax
+			.endif
+			invoke SetClassLong, hWnd,GCL_HCURSOR,hCursor
+			mov DrawType, _point
+		.elseif    ax == IDM_ERASE
+			invoke  LoadCursor,NULL,IDC_HAND
+			.if eax
+			mov hCursor, eax
+			.endif
+			invoke SetClassLong, hWnd,GCL_HCURSOR,hCursor
+			mov DrawType, _erase
+		.elseif    ax == IDM_BIG
+			invoke ResizeImage,hDc, 1, 2
+		.elseif    ax == IDM_SMALL
+			invoke ResizeImage,hDc, 0, 2
+		.elseif    ax == IDM_H
+			invoke FlipImage,hDc, 1
+		.elseif    ax == IDM_V
+			invoke FlipImage,hDc, 2
+		.elseif ax == IDM_S
+			invoke FlipImage,hDc, 3
+		.elseif    ax == IDM_SAVE
+			invoke SaveFile, hWinMain, lastBmp
+		.elseif    ax == IDM_OPEN
+			invoke	 DialogBoxParam,hInstance,IDD_SAVEDLG,hWnd,addr OptionProc,0
+			invoke GetDC, hWinMain
+			mov hDc, eax
+			invoke _OpenFile, hWinMain, hDc
+		.elseif    ax == IDM_HELP
+			invoke MessageBox, NULL, addr szHelp, addr szHelpCaption, MB_OK 
+		.endif
+	.elseif  uMsg  ==  WM_SIZE
+		call     _Resize
+		invoke _SetScreenWH, hWnd
+		invoke _ReDraw, hWnd
+		invoke UpdateWindow, hWnd
+	.elseif  uMsg  ==  WM_NOTIFY
+		mov      ebx,lParam
+		.if      [ebx + NMHDR.code] == TTN_NEEDTEXT
+			assume   ebx:ptr TOOLTIPTEXT
+			mov      eax,[ebx].hdr.idFrom
+			mov      [ebx].lpszText,eax
+			push     hInstance
+			pop      [ebx].hInst
+			assume  ebx:nothing
+			.elseif  ([ebx + NMHDR.code] == TBN_QUERYINSERT) || ([ebx + NMHDR.code] == TBN_QUERYDELETE)
+			mov      eax,TRUE
 			ret
-        .endif
-	    xor     eax,eax
-	    ret
+		.elseif  [ebx + NMHDR.code] ==  TBN_GETBUTTONINFO
+			assume   ebx:ptr TBNOTIFY
+			mov      eax,[ebx].iItem
+			.if      eax < NUM_BUTTONS
+				mov     ecx,sizeof TBBUTTON
+				mul     ecx
+				add     eax,offset stToolbar
+				invoke  RtlMoveMemory,addr [ebx].tbButton,eax,sizeof TBBUTTON
+				invoke  LoadString,hInstance,[ebx].tbButton.idCommand,addr @szBuffer,sizeof @szBuffer
+				lea     eax,@szBuffer
+				mov     [ebx].pszText,eax
+				invoke  lstrlen,addr @szBuffer
+				mov     [ebx].cchText,eax
+				assume  ebx:nothing
+				mov     eax,TRUE
+				ret
+			.endif
+		.endif
+	.ELSEIF uMsg==WM_DESTROY
+		invoke PostQuitMessage,NULL
+	.ELSEIF uMsg==WM_LBUTTONDOWN
+		invoke _LeftButtonDown, hWnd, lParam
+	.ELSEIF uMsg==WM_MOUSEMOVE
+		invoke _InterfacePainting
+		invoke _MouseMove, hWnd, lParam
+	.ELSEIF uMsg==WM_LBUTTONUP || uMsg==WM_MOUSELEAVE
+		invoke _LeftButtonUp, hWnd, lParam
+	.elseif uMsg==WM_PAINT
+		invoke UpdateWindow, hWnd
+	.ELSEIF uMsg==WM_ERASEBKGND
+		call     _Resize
+		invoke _SetScreenWH, hWnd
+		invoke UpdateWindow, hWnd
+		invoke _ReDraw, hWnd			
+	.else
+		invoke    DefWindowProc,hWnd,uMsg,wParam,lParam
+		ret
+	.endif
+	xor     eax,eax
+	ret
 _ProcWinMain    endp
+;============================================
 
 ;============================================
 ; 创建窗口
@@ -710,14 +682,15 @@ _WinMain proc
 	.break .if eax == 0
 	invoke TranslateMessage,addr @stMsg
 	invoke DispatchMessage,addr @stMsg
-.endw
-ret
+	.endw
+	ret
 _WinMain endp
+;============================================
 
 main proc
-call _WinMain
-invoke ExitProcess,NULL
-main endp
+	call _WinMain
+	invoke ExitProcess,NULL
+	main endp
 end main
  
 
